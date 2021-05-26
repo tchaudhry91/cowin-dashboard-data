@@ -1,4 +1,4 @@
-from common import get_common_headers, get_formatted_date
+from common import get_common_headers, clean_date
 from http import HTTPStatus
 import csv
 import requests
@@ -8,6 +8,13 @@ class FetchException(Exception):
     def __init__(self, url, message):
         self.url = url
         self.message = message
+
+
+class ReportMismatchException(Exception):
+    def __init__(self, district_id, district_name, state_id):
+        self.district_id = district_id
+        self.district_name = district_name
+        self.state_id = state_id
 
 
 def get_district_list():
@@ -111,3 +118,73 @@ def write_csv(fname, district_top_level_data_list):
         writer.writeheader()
         for district_top_level_data in district_top_level_data_list:
             writer.writerow(district_top_level_data)
+
+
+def get_vac_weekly_reports(district_id, state_id, district_name, date):
+    """
+    Returns the weekly vaccination data for a particular district
+    """
+    url = "https://api.cowin.gov.in/api/v1/reports/v2/getVacPublicReports"
+    query = {'state_id': state_id, 'district_id': district_id, 'date': date}
+    resp = requests.get(
+        url, params=query, headers=get_common_headers())
+    if resp.status_code != HTTPStatus.OK:
+        raise FetchException(url, resp.status_code)
+    full_data = resp.json()
+    weekly_reports = full_data.get("weeklyReport")
+    weekly_reports_by_age = full_data.get("weeklyVacAgeWiseReport")
+    # Add some base information as well
+    district_data = {}
+    district_data['district_id'] = district_id
+    district_data['state_id'] = state_id
+    district_data['district_name'] = district_name
+    district_data['weekly'] = []
+
+    # Combine the two reports
+    for i in range(len(weekly_reports)):
+        report_label = weekly_reports[i].get("label")
+        if report_label != weekly_reports_by_age[i].get("label"):
+            raise ReportMismatchException(district_id, district_name, state_id)
+        report = {
+            "label": report_label,
+            "total": weekly_reports[i].get("total"),
+            "startdate": clean_date(weekly_reports_by_age[i].get("startdate")),
+            "enddate": clean_date(weekly_reports_by_age[i].get("enddate")),
+            "18_45_vaccination": weekly_reports_by_age[i].get("vac_18_45"),
+            "45_60_vaccination": weekly_reports_by_age[i].get("vac_45_60"),
+            "60+_vaccination": weekly_reports_by_age[i].get("vac_60_above"),
+            "dose1": weekly_reports[i].get("dose1"),
+            "dose2": weekly_reports[i].get("dose2"),
+        }
+        district_data['weekly'].append(report)
+    return district_data
+
+
+def write_csv_weekly(fname, district_weekly_data_list):
+    """
+    Write weekly vaccination breakup for all districts to a csv.
+    """
+    with open(fname, "w") as csvfile:
+        fieldnames = [
+            "label",
+            "startdate",
+            "enddate",
+            "district_id",
+            "state_id",
+            "district_name",
+            "total",
+            "18_45_vaccination",
+            "45_60_vaccination",
+            "60+_vaccination",
+            "dose1",
+            "dose2",
+        ]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for district_weekly_data in district_weekly_data_list:
+            for week in district_weekly_data.get('weekly'):
+                row = week
+                row['district_id'] = district_weekly_data['district_id']
+                row['district_name'] = district_weekly_data['district_name']
+                row['state_id'] = district_weekly_data['state_id']
+                writer.writerow(row)

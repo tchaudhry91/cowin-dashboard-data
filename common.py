@@ -11,3 +11,8 @@ def get_common_headers():
 
 def get_formatted_date():
     return datetime.datetime.today().strftime("%Y-%m-%d")
+
+
+def clean_date(date_str):
+    d = datetime.datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+    return d.strftime("%d-%m-%Y")
