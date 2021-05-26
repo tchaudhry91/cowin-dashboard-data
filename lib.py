@@ -120,6 +120,55 @@ def write_csv(fname, district_top_level_data_list):
             writer.writerow(district_top_level_data)
 
 
+def get_session_daily_reports(district_id, state_id, district_name, date):
+    """
+    Returns the daily session data for a particular district
+    """
+    url = "https://api.cowin.gov.in/api/v1/reports/v2/getPublicReports"
+    query = {'state_id': state_id, 'district_id': district_id, 'date': date}
+    resp = requests.get(
+        url, params=query, headers=get_common_headers())
+    if resp.status_code != HTTPStatus.OK:
+        raise FetchException(url, resp.status_code)
+    full_data = resp.json()
+    # Add some base information as well
+    district_data = {}
+    district_data['district_id'] = district_id
+    district_data['state_id'] = state_id
+    district_data['district_name'] = district_name
+    # Add Session Data
+
+    # Says 5 days but is actually 30
+    sessions_list = full_data.get("last5daySessionStatus")
+    sessions_list.sort(key=lambda r: r.get("session_date"))
+
+    district_data['session_daily'] = sessions_list
+
+    return district_data
+
+
+def write_csv_daily_sessions(fname, session_data_list):
+    with open(fname, "w") as csvfile:
+        fieldnames = [
+            "district_id",
+            "state_id",
+            "district_name",
+            "session_date",
+            "total",
+            "planned",
+            "ongoing",
+            "completed",
+        ]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for session_data in session_data_list:
+            for row in session_data.get("session_daily"):
+                row['district_id'] = session_data['district_id']
+                row['district_name'] = session_data['district_name']
+                row['state_id'] = session_data['state_id']
+                writer.writerow(row)
+
+
 def get_vac_weekly_reports(district_id, state_id, district_name, date):
     """
     Returns the weekly vaccination data for a particular district
@@ -138,7 +187,7 @@ def get_vac_weekly_reports(district_id, state_id, district_name, date):
     district_data['district_id'] = district_id
     district_data['state_id'] = state_id
     district_data['district_name'] = district_name
-    district_data['weekly'] = []
+    district_data['weekly_vac'] = []
 
     # Combine the two reports
     for i in range(len(weekly_reports)):
@@ -156,11 +205,12 @@ def get_vac_weekly_reports(district_id, state_id, district_name, date):
             "dose1": weekly_reports[i].get("dose1"),
             "dose2": weekly_reports[i].get("dose2"),
         }
-        district_data['weekly'].append(report)
+        district_data['weekly_vac'].append(report)
+
     return district_data
 
 
-def write_csv_weekly(fname, district_weekly_data_list):
+def write_csv_weekly_vac(fname, district_weekly_data_list):
     """
     Write weekly vaccination breakup for all districts to a csv.
     """
@@ -182,9 +232,45 @@ def write_csv_weekly(fname, district_weekly_data_list):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for district_weekly_data in district_weekly_data_list:
-            for week in district_weekly_data.get('weekly'):
+            for week in district_weekly_data.get('weekly_vac'):
                 row = week
                 row['district_id'] = district_weekly_data['district_id']
                 row['district_name'] = district_weekly_data['district_name']
                 row['state_id'] = district_weekly_data['state_id']
                 writer.writerow(row)
+
+
+def get_weekly_registration_trends(date):
+    """
+    Returns a list of objects for each week with registration data
+    """
+    url = "https://api.cowin.gov.in/api/v1/reports/v2/getVacPublicReports"
+    query = {'state_id': "", 'district_id': "", 'date': date}
+    resp = requests.get(
+        url, params=query, headers=get_common_headers())
+    if resp.status_code != HTTPStatus.OK:
+        raise FetchException(url, resp.status_code)
+    full_data = resp.json()
+    return full_data.get("regWeekReportData")
+
+
+def write_csv_registeration_national_weekly(fname, weekly_registration_list):
+    with open(fname, "w") as csvfile:
+        fieldnames = [
+            "label",
+            "startdate",
+            "enddate",
+            "total",
+            "age18",
+            "age45",
+            "age60",
+            "male",
+            "female",
+            "others",
+        ]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for weekly_reg in weekly_registration_list:
+            weekly_reg['startdate'] = clean_date(weekly_reg['startdate'])
+            weekly_reg['enddate'] = clean_date(weekly_reg['enddate'])
+            writer.writerow(weekly_reg)
