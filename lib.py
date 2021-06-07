@@ -72,8 +72,7 @@ def build_district_top_level_data(district_public_report):
     data['male_vaccination'] = top_block.get("vaccination").get("male")
     data['female_vaccination'] = top_block.get("vaccination").get("female")
     data['other_vaccination'] = top_block.get("vaccination").get("others")
-    data['18_30_vaccination'] = vaccination_by_age.get("vac_18_30")
-    data['30_45_vaccination'] = vaccination_by_age.get("vac_30_45")
+    data['18_45_vaccination'] = vaccination_by_age.get("vac_18_45")
     data['45_60_vaccination'] = vaccination_by_age.get("vac_45_60")
     data['60+_vaccination'] = vaccination_by_age.get("above_60")
     data['covishield'] = top_block.get("vaccination").get("covishield")
@@ -104,8 +103,7 @@ def write_csv(fname, district_top_level_data_list):
             "male_vaccination",
             "female_vaccination",
             "other_vaccination",
-            "18_30_vaccination",
-            "30_45_vaccination",
+            "18_45_vaccination",
             "45_60_vaccination",
             "60+_vaccination",
             "covishield",
